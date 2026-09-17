@@ -61,6 +61,7 @@ interface RoleCardProps {
   onSubmitAlibiCode?: (code: string) => Promise<any> | any;
   onPadrinoSkipKill?: () => Promise<any> | any;
   onImpTransfer?: () => Promise<any> | any;
+  onOpenTutorial?: () => void;
 }
 
 export const RoleCard: React.FC<RoleCardProps> = ({
@@ -88,6 +89,7 @@ export const RoleCard: React.FC<RoleCardProps> = ({
   onSubmitAlibiCode,
   onPadrinoSkipKill,
   onImpTransfer,
+  onOpenTutorial,
 }) => {
   const [showSecret, setShowSecret] = useState(false);
   const [killCode, setKillCode] = useState('');
@@ -307,14 +309,28 @@ export const RoleCard: React.FC<RoleCardProps> = ({
             </span>
           </div>
 
-          <button
-            id="toggle-secret-btn"
-            onClick={() => setShowSecret(!showSecret)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-750 text-neutral-300 text-xs font-semibold border border-neutral-700 transition"
-          >
-            {showSecret ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-            {showSecret ? 'Ocultar Credencial' : 'Tocar para ver'}
-          </button>
+          <div className="flex items-center gap-2">
+            {onOpenTutorial && (
+              <button
+                id="open-tutorial-rolecard-btn"
+                onClick={onOpenTutorial}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-semibold border border-amber-500/30 transition"
+                title="Tutorial de Iconos y Acciones"
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden sm:inline">Tutorial</span>
+              </button>
+            )}
+
+            <button
+              id="toggle-secret-btn"
+              onClick={() => setShowSecret(!showSecret)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-750 text-neutral-300 text-xs font-semibold border border-neutral-700 transition"
+            >
+              {showSecret ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              {showSecret ? 'Ocultar Credencial' : 'Tocar para ver'}
+            </button>
+          </div>
         </div>
 
         {showSecret ? (

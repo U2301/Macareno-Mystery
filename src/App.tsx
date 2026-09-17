@@ -45,7 +45,8 @@ import { ShopPanel } from './components/ShopPanel';
 import { EndGameScreen } from './components/EndGameScreen';
 import { RoleCompendiumModal } from './components/RoleCompendiumModal';
 import { MacarenoWheelModal } from './components/MacarenoWheelModal';
-import { BookOpen } from 'lucide-react';
+import { GameTutorialModal } from './components/GameTutorialModal';
+import { BookOpen, HelpCircle } from 'lucide-react';
 
 export default function App() {
   // Session / Room state
@@ -59,6 +60,7 @@ export default function App() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isAIOracleOpen, setIsAIOracleOpen] = useState(false);
   const [isCompendiumOpen, setIsCompendiumOpen] = useState(false);
+  const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [joinErrorMessage, setJoinErrorMessage] = useState<string | null>(null);
   const [activeMobileTab, setActiveMobileTab] = useState<'role' | 'missions' | 'shop' | 'chat'>('role');
@@ -112,6 +114,16 @@ export default function App() {
     const interval = setInterval(poll, 2000);
     return () => clearInterval(interval);
   }, [currentRoomCode, currentPlayer?.id]);
+
+  // Auto-show step-by-step tutorial on first game start
+  useEffect(() => {
+    if (gameState?.status === 'playing') {
+      const seen = localStorage.getItem('macareno_tutorial_seen');
+      if (!seen) {
+        setIsTutorialOpen(true);
+      }
+    }
+  }, [gameState?.status]);
 
   // 2. Action Helpers
   const sendRoomAction = async (actionType: string, payload: any = {}) => {
@@ -605,6 +617,14 @@ export default function App() {
         initialRole={currentPlayer.role}
       />
 
+      {/* Step-by-Step Game Tutorial Modal (Onboarding & Icon/Action Guide) */}
+      <GameTutorialModal
+        isOpen={isTutorialOpen}
+        onClose={() => setIsTutorialOpen(false)}
+        currentPlayer={currentPlayer}
+        onNavigateToCompendium={() => setIsCompendiumOpen(true)}
+      />
+
       {/* Mobile Top Navigation Header */}
       <header className="border-b border-neutral-800 bg-neutral-900/90 backdrop-blur sticky top-0 z-40 px-4 py-2.5">
         <div className="max-w-md mx-auto flex items-center justify-between">
@@ -629,8 +649,18 @@ export default function App() {
             </div>
           </div>
 
-          {/* Phase Cycle Badge + Timer + Wallet + Guide + AI */}
+          {/* Phase Cycle Badge + Timer + Wallet + Guide + Tutorial + AI */}
           <div className="flex items-center gap-1.5">
+            {/* Step-by-step Tutorial & Icons Guide Button */}
+            <button
+              id="open-tutorial-header-btn"
+              onClick={() => setIsTutorialOpen(true)}
+              className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:text-white hover:bg-amber-500/25 transition"
+              title="Tutorial Paso a Paso: Iconos y Acciones"
+            >
+              <HelpCircle className="w-4 h-4 text-amber-400" />
+            </button>
+
             {/* Roles Guide & Instructions Button */}
             <button
               id="open-compendium-header-btn"
@@ -760,6 +790,7 @@ export default function App() {
               onSubmitAlibiCode={handleSubmitAlibiCode}
               onPadrinoSkipKill={handlePadrinoSkipKill}
               onImpTransfer={handleImpTransfer}
+              onOpenTutorial={() => setIsTutorialOpen(true)}
             />
 
             {/* Panic Buzzer for Emergency Meeting */}
