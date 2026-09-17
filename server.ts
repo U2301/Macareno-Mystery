@@ -247,7 +247,11 @@ function processNightRevelations(room: RoomData) {
         const reportEntry: NightReportEntry = {
           id: 'rep_photo_' + Date.now(),
           title: `Revelado Químico: ${target.name}`,
+          roleSource: 'LAB FOTOGRÁFICO',
           detail: `El negativo del cuarto oscuro dictamina: ${
+            isHostile ? '🔴 SOMBRAS (Hostil / Sospechoso)' : '🟢 FIESTA (Inocente)'
+          }.`,
+          content: `El negativo del cuarto oscuro dictamina: ${
             isHostile ? '🔴 SOMBRAS (Hostil / Sospechoso)' : '🟢 FIESTA (Inocente)'
           }.`,
           timestamp: timeStr,
@@ -300,7 +304,9 @@ function processNightRevelations(room: RoomData) {
         const reportEntry: NightReportEntry = {
           id: 'rep_chism_' + Date.now(),
           title: `Cotejo de Rumores: ${p1.name} vs ${p2.name}`,
+          roleSource: 'CHISMOSO',
           detail: verdict,
+          content: verdict,
           timestamp: timeStr,
         };
         p.nightReports = p.nightReports || [];
@@ -346,7 +352,9 @@ function processNightRevelations(room: RoomData) {
         const reportEntry: NightReportEntry = {
           id: 'rep_det_' + Date.now(),
           title: `Vigilancia Nocturna: ${p1.name} y ${p2.name}`,
+          roleSource: 'DETECTIVE PRIVADO',
           detail: verdict,
+          content: verdict,
           timestamp: timeStr,
         };
         p.nightReports = p.nightReports || [];
@@ -390,7 +398,9 @@ function processNightRevelations(room: RoomData) {
         const reportEntry: NightReportEntry = {
           id: 'rep_per_' + Date.now(),
           title: `Edición de Prensa: ${target.name}`,
+          roleSource: 'PRENSA Y PRIMICIAS',
           detail,
+          content: detail,
           timestamp: timeStr,
         };
         p.nightReports = p.nightReports || [];
@@ -426,7 +436,9 @@ function processNightRevelations(room: RoomData) {
       const reportEntry: NightReportEntry = {
         id: 'rep_mayordomo_' + Date.now(),
         title: 'Censo de Sombras del Mayordomo Mayor',
+        roleSource: 'MAYORDOMO MAYOR',
         detail,
+        content: detail,
         timestamp: timeStr,
       };
       p.nightReports = p.nightReports || [];
@@ -834,42 +846,6 @@ app.get('/api/rooms/:roomCode', (req, res) => {
 
   if (!room) {
     return res.status(404).json({ error: 'Sala no encontrada' });
-  }
-
-  // Auto-resolve pending photographer developing time if 45s have passed
-  const now = Date.now();
-  for (const p of room.players) {
-    if (p.investigationPending && now >= p.investigationPending.revealTime) {
-      const target = room.players.find((t) => t.id === p.investigationPending?.targetId);
-      if (target) {
-        const isHostile = target.team === 'Sombras (Asesinos)';
-        const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const photoRecord = {
-          id: 'photo_' + Date.now(),
-          targetId: target.id,
-          targetName: target.name,
-          team: target.team,
-          isHostile,
-          revealedAt: timeStr,
-        };
-        p.revealedPhotos = p.revealedPhotos || [];
-        p.revealedPhotos.unshift(photoRecord);
-
-        room.chatMessages.push({
-          id: 'rev_auto_' + Date.now(),
-          senderId: 'system',
-          senderName: 'ÁRBITRO IA (LAB FOTO)',
-          receiverId: p.id,
-          content: `📷 REVELADO COMPLETADO: El análisis químico de "${target.name}" arroja que pertenece a: ${
-            isHostile ? '🔴 SOMBRAS (Bando Asesino)' : '🟢 FIESTA (Inocente)'
-          }. El informe ha quedado archivado en tu Credencial de Rol.`,
-          timestamp: timeStr,
-          isAI: true,
-          isSystem: true,
-        });
-      }
-      p.investigationPending = undefined;
-    }
   }
 
   res.json({

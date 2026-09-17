@@ -183,14 +183,10 @@ export const RoleCard: React.FC<RoleCardProps> = ({
     setChismosoLoading(true);
     try {
       const res: any = await onUseChismoso(chismosoP1, chismosoP2);
-      if (res && res.chismosoReport) {
+      if (res && res.success) {
+        setChismosoResult('🤫 Rumor en cotejo registrado. El veredicto confidencial llegará a tu Buzón Nocturno al caer la noche.');
+      } else if (res && res.chismosoReport) {
         setChismosoResult(res.chismosoReport.verdict);
-      } else if (res && res.sameTeam !== undefined) {
-        setChismosoResult(
-          res.sameTeam
-            ? '¡Coincidencia! Ambos jugadores pertenecen exactamente al mismo bando.'
-            : '¡Bandos Opuestos! Uno de ellos es Fiesta y el otro Sombras.'
-        );
       } else if (res && res.error) {
         setChismosoResult(`⚠️ ${res.error}`);
       }
@@ -208,14 +204,9 @@ export const RoleCard: React.FC<RoleCardProps> = ({
     if (res && res.error) {
       setPeriodistaFeedback(`⚠️ ${res.error}`);
     } else {
-      const correct = typeof res === 'boolean' ? res : res?.isCorrect;
-      setPeriodistaFeedback(
-        correct
-          ? `¡Primicia confirmada! Has acertado: ${targetName} es ${periodistaRoleGuess}. (+15 monedas del Seven)`
-          : `Pista refutada: ${targetName} NO ostenta ese rol.`
-      );
+      setPeriodistaFeedback(`📰 Teoría registrada sobre ${targetName || 'el invitado'}. La edición nocturna dictaminará en tu Buzón Nocturno si acertaste (+15 monedas).`);
     }
-    setTimeout(() => setPeriodistaFeedback(null), 5000);
+    setTimeout(() => setPeriodistaFeedback(null), 6000);
   };
 
   const handleMedicoSubmit = async () => {
@@ -498,11 +489,13 @@ export const RoleCard: React.FC<RoleCardProps> = ({
                 className="p-3.5 rounded-2xl bg-neutral-950 border border-sky-900/40 text-xs space-y-1 shadow-inner"
               >
                 <div className="flex items-center justify-between text-sky-400 font-mono text-[10px]">
-                  <span className="font-bold uppercase tracking-wider">{report.roleSource}</span>
+                  <span className="font-bold uppercase tracking-wider">
+                    {report.title || report.roleSource || 'INFORME CONFIDENCIAL'}
+                  </span>
                   <span className="text-neutral-400">{report.timestamp}</span>
                 </div>
                 <p className="text-neutral-100 text-xs font-medium leading-relaxed">
-                  {report.content}
+                  {report.detail || report.content}
                 </p>
               </div>
             ))}
@@ -624,7 +617,7 @@ export const RoleCard: React.FC<RoleCardProps> = ({
               </div>
             )}
             <p className="text-neutral-300 leading-relaxed">
-              Toma una fotografía rápida a un invitado en persona con la app. Tras el revelado en cuarto oscuro (45s o forzado manual), descubrirás su verdadera alineación:
+              Toma una fotografía discreta a un invitado durante el <strong>DÍA</strong>. El negativo se revelará en el cuarto oscuro durante la <strong>NOCHE</strong> y el dictamen confidencial se depositará en tu Buzón Nocturno:
             </p>
 
             {player.investigationPending ? (
@@ -632,28 +625,19 @@ export const RoleCard: React.FC<RoleCardProps> = ({
                 <div className="flex items-center justify-between font-bold">
                   <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4 text-sky-400 animate-spin" />
-                    <span>Revelado Químico en Proceso</span>
+                    <span>Negativo en el Cuarto Oscuro</span>
                   </div>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-900 text-sky-300 font-mono">
-                    En laboratorio
+                  <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-sky-900 text-sky-300 font-mono">
+                    En espera de la Noche
                   </span>
                 </div>
-                <p className="text-[11px] text-sky-100">
-                  Analizando el negativo de{' '}
+                <p className="text-[11px] text-sky-100 leading-relaxed">
+                  Negativo químico de{' '}
                   <strong className="text-white">
                     {players.find((p) => p.id === player.investigationPending?.targetId)?.name || 'Objetivo'}
-                  </strong>
-                  .
+                  </strong>{' '}
+                  en proceso de fijado. Al caer la noche, el dictamen de alineación se revelará automáticamente en tu <strong className="text-sky-300">Buzón Nocturno</strong>.
                 </p>
-                {onAccelerateFotografo && (
-                  <button
-                    onClick={onAccelerateFotografo}
-                    className="w-full mt-2 py-2 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition"
-                  >
-                    <Zap className="w-3.5 h-3.5" />
-                    Revelar Negativo Ahora Mismo
-                  </button>
-                )}
               </div>
             ) : (
               <div className="space-y-2">
@@ -742,10 +726,33 @@ export const RoleCard: React.FC<RoleCardProps> = ({
             )}
 
             <p className="text-neutral-300">
-              Compara a 2 jugadores una sola vez por partida para descubrir si comparten la misma alineación o son enemigos:
+              Compara a 2 invitados una sola vez por partida durante el <strong>DÍA</strong>. Tu informe confidencial se entregará en tu Buzón Nocturno al caer la noche:
             </p>
 
-            {player.chismosoReport || player.chismosoUsed ? (
+            {player.chismosoPending ? (
+              <div className="p-4 rounded-2xl bg-amber-950/40 border border-amber-500/40 text-amber-100 space-y-2">
+                <div className="flex items-center justify-between font-bold">
+                  <div className="flex items-center gap-1.5 text-amber-300">
+                    <Clock className="w-4 h-4 text-amber-400 animate-spin" />
+                    <span>Cotejo de Rumores en Proceso</span>
+                  </div>
+                  <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-amber-900 text-amber-300 font-mono">
+                    En espera de la Noche
+                  </span>
+                </div>
+                <p className="text-[11px] text-amber-100 leading-relaxed">
+                  Has puesto la mira en{' '}
+                  <strong className="text-white">
+                    {players.find((p) => p.id === player.chismosoPending?.p1Id)?.name || 'Sospechoso 1'}
+                  </strong>{' '}
+                  y{' '}
+                  <strong className="text-white">
+                    {players.find((p) => p.id === player.chismosoPending?.p2Id)?.name || 'Sospechoso 2'}
+                  </strong>
+                  . Al caer la noche, tu informe confidencial revelará en tu Buzón Nocturno si pertenecen al mismo bando o son rivales.
+                </p>
+              </div>
+            ) : player.chismosoReport || player.chismosoUsed ? (
               <div className="p-4 rounded-2xl bg-amber-950/40 border border-amber-500/40 text-amber-100 space-y-2">
                 <div className="flex items-center justify-between font-bold">
                   <div className="flex items-center gap-1.5 text-amber-300">
@@ -1134,55 +1141,102 @@ export const RoleCard: React.FC<RoleCardProps> = ({
             )}
 
             <p className="text-neutral-300">
-              Formula teorías sobre las identidades secretas de otros invitados. Si aciertas su rol exacto, recibirás una recompensa de +15 monedas del Seven:
+              Formula teorías sobre las identidades secretas de otros invitados durante el <strong>DÍA</strong>. Al caer la noche, tu primicia se cotejará y el dictamen se entregará en tu Buzón Nocturno (+15 monedas si aciertas):
             </p>
 
-            <div className="grid grid-cols-2 gap-2">
-              <select
-                value={periodistaTarget}
-                onChange={(e) => setPeriodistaTarget(e.target.value)}
-                disabled={currentPhase !== 'Día'}
-                className="bg-neutral-950 border border-neutral-800 rounded-xl px-2.5 py-2 text-xs text-white outline-none disabled:opacity-40"
-              >
-                <option value="">Investigado...</option>
-                {players.filter(p => p.id !== player.id).map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
+            {player.periodistaPending ? (
+              <div className="p-3.5 rounded-2xl bg-cyan-950/40 border border-cyan-600/40 text-cyan-200 space-y-1">
+                <div className="font-bold flex items-center justify-between text-cyan-300">
+                  <div className="flex items-center gap-1.5">
+                    <Clock className="w-4 h-4 text-cyan-400 animate-spin" />
+                    <span>Teoría en Redacción para la Noche</span>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-900 text-cyan-300 font-mono">
+                    En imprenta
+                  </span>
+                </div>
+                <p className="text-[11px] text-cyan-100">
+                  Investigando si <strong className="text-white">{players.find((p) => p.id === player.periodistaPending?.targetId)?.name || 'Objetivo'}</strong> ostenta el rol de <strong className="text-white">{player.periodistaPending?.guessedRole}</strong>. El dictamen oficial llegará a tu Buzón Nocturno al anochecer.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    value={periodistaTarget}
+                    onChange={(e) => setPeriodistaTarget(e.target.value)}
+                    disabled={currentPhase !== 'Día'}
+                    className="bg-neutral-950 border border-neutral-800 rounded-xl px-2.5 py-2 text-xs text-white outline-none disabled:opacity-40"
+                  >
+                    <option value="">Investigado...</option>
+                    {players.filter(p => p.id !== player.id).map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
 
-              <select
-                value={periodistaRoleGuess}
-                onChange={(e) => setPeriodistaRoleGuess(e.target.value as RoleType)}
-                disabled={currentPhase !== 'Día'}
-                className="bg-neutral-950 border border-neutral-800 rounded-xl px-2.5 py-2 text-xs text-white outline-none disabled:opacity-40"
-              >
-                <option value="El Fotógrafo">El Fotógrafo</option>
-                <option value="El Chismoso">El Chismoso</option>
-                <option value="El Médico Forense">El Médico Forense</option>
-                <option value="El Escolta">El Escolta</option>
-                <option value="El Camaleón">El Camaleón</option>
-                <option value="El Cómplice / Hacker">El Cómplice / Hacker</option>
-                <option value="El Detective Privado">El Detective Privado</option>
-                <option value="El Sommelier">El Sommelier</option>
-                <option value="El Barman Envenenador">El Barman Envenenador</option>
-                <option value="El Abogado de las Sombras">El Abogado de las Sombras</option>
-                <option value="El Cazador Vengativo">El Cazador Vengativo</option>
-                <option value="El Santo">El Santo</option>
-                <option value="El Recluso">El Recluso</option>
-                <option value="El Borracho">El Borracho</option>
-                <option value="El Paranoico">El Paranoico</option>
-                <option value="Asesino">Asesino</option>
-              </select>
-            </div>
+                  <select
+                    value={periodistaRoleGuess}
+                    onChange={(e) => setPeriodistaRoleGuess(e.target.value as RoleType)}
+                    disabled={currentPhase !== 'Día'}
+                    className="bg-neutral-950 border border-neutral-800 rounded-xl px-2.5 py-2 text-xs text-white outline-none disabled:opacity-40"
+                  >
+                    <option value="El Fotógrafo">El Fotógrafo</option>
+                    <option value="El Chismoso">El Chismoso</option>
+                    <option value="El Médico Forense">El Médico Forense</option>
+                    <option value="El Escolta">El Escolta</option>
+                    <option value="El Camaleón">El Camaleón</option>
+                    <option value="El Cómplice / Hacker">El Cómplice / Hacker</option>
+                    <option value="El Detective Privado">El Detective Privado</option>
+                    <option value="El Sommelier">El Sommelier</option>
+                    <option value="El Barman Envenenador">El Barman Envenenador</option>
+                    <option value="El Abogado de las Sombras">El Abogado de las Sombras</option>
+                    <option value="El Cazador Vengativo">El Cazador Vengativo</option>
+                    <option value="El Santo">El Santo</option>
+                    <option value="El Recluso">El Recluso</option>
+                    <option value="El Borracho">El Borracho</option>
+                    <option value="El Paranoico">El Paranoico</option>
+                    <option value="Asesino">Asesino</option>
+                  </select>
+                </div>
 
-            <button
-              onClick={handlePeriodistaSubmit}
-              disabled={!periodistaTarget || currentPhase !== 'Día'}
-              className="w-full py-2.5 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 text-white rounded-xl font-bold flex items-center justify-center gap-1.5 transition"
-            >
-              <FileText className="w-3.5 h-3.5" />
-              {currentPhase === 'Día' ? 'Registrar Teoría Periodística' : 'Solo Disponible de Día'}
-            </button>
+                <button
+                  onClick={handlePeriodistaSubmit}
+                  disabled={!periodistaTarget || currentPhase !== 'Día'}
+                  className="w-full py-2.5 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 text-white rounded-xl font-bold flex items-center justify-center gap-1.5 transition"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  {currentPhase === 'Día' ? 'Registrar Teoría Periodística' : 'Solo Disponible de Día'}
+                </button>
+              </div>
+            )}
+
+            {player.periodistaTheories && player.periodistaTheories.length > 0 && (
+              <div className="space-y-1.5 pt-2 border-t border-neutral-800">
+                <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
+                  Historial de Primicias Publicadas:
+                </div>
+                <div className="space-y-1">
+                  {player.periodistaTheories.map((theory, idx) => {
+                    const targetName = players.find((p) => p.id === theory.targetId)?.name || 'Invitado';
+                    return (
+                      <div
+                        key={idx}
+                        className={`p-2 rounded-xl border text-[11px] flex items-center justify-between ${
+                          theory.isCorrect
+                            ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
+                            : 'bg-rose-950/40 border-rose-500/40 text-rose-200'
+                        }`}
+                      >
+                        <span>{targetName}: {theory.guessedRole}</span>
+                        <span className="font-bold text-[10px]">
+                          {theory.isCorrect ? '✅ Acertado (+15)' : '❌ Refutado'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {periodistaFeedback && (
               <div className="p-2.5 rounded-xl bg-cyan-950/60 border border-cyan-600/40 text-cyan-200 font-semibold">
@@ -1211,14 +1265,27 @@ export const RoleCard: React.FC<RoleCardProps> = ({
               Selecciona a dos invitados para vigilarlos de día. Al caer la noche, tu informe confidencial revelará si <strong>al menos uno de ellos</strong> pertenece a las Sombras.
             </p>
 
-            {player.pendingDetectiveP1 && player.pendingDetectiveP2 ? (
+            {player.detectivePending || (player.pendingDetectiveP1 && player.pendingDetectiveP2) ? (
               <div className="p-3.5 rounded-2xl bg-sky-950/40 border border-sky-600/40 text-sky-200 space-y-1">
-                <div className="font-bold flex items-center gap-1.5 text-sky-300">
-                  <Clock className="w-4 h-4 text-sky-400 animate-spin" />
-                  Pesquisas en curso para la noche
+                <div className="font-bold flex items-center justify-between text-sky-300">
+                  <div className="flex items-center gap-1.5">
+                    <Clock className="w-4 h-4 text-sky-400 animate-spin" />
+                    <span>Pesquisas en curso para la noche</span>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-900 text-sky-300 font-mono">
+                    En seguimiento
+                  </span>
                 </div>
                 <p className="text-[11px] text-sky-100">
-                  Vigilando a: <strong className="text-white">{players.find(p => p.id === player.pendingDetectiveP1)?.name}</strong> y <strong className="text-white">{players.find(p => p.id === player.pendingDetectiveP2)?.name}</strong>. El informe llegará al anochecer.
+                  Vigilando a:{' '}
+                  <strong className="text-white">
+                    {players.find((p) => p.id === (player.detectivePending?.p1Id || player.pendingDetectiveP1))?.name || 'Sospechoso 1'}
+                  </strong>{' '}
+                  y{' '}
+                  <strong className="text-white">
+                    {players.find((p) => p.id === (player.detectivePending?.p2Id || player.pendingDetectiveP2))?.name || 'Sospechoso 2'}
+                  </strong>
+                  . El informe confidencial llegará al anochecer a tu Buzón Nocturno.
                 </p>
               </div>
             ) : (
@@ -1277,6 +1344,16 @@ export const RoleCard: React.FC<RoleCardProps> = ({
                     {detectiveFeedback}
                   </div>
                 )}
+              </div>
+            )}
+
+            {player.detectiveLastReport && (
+              <div className="p-3 rounded-2xl bg-sky-950/60 border border-sky-600/40 text-sky-200 text-xs space-y-1">
+                <div className="font-bold text-sky-300 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
+                  <FileText className="w-3.5 h-3.5 text-sky-400" />
+                  Último Dictamen de Vigilancia:
+                </div>
+                <p className="font-medium text-white">{player.detectiveLastReport}</p>
               </div>
             )}
           </div>
