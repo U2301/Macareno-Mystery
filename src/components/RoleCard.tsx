@@ -547,7 +547,7 @@ export const RoleCard: React.FC<RoleCardProps> = ({
               </div>
             )}
             <p className="text-xs text-neutral-300 leading-relaxed">
-              Acorrala a un invitado a solas (sin testigos a 3m), susúrrale discretamente al oído la frase: <strong className="text-rose-400">"¿Qué traes allí?"</strong> y solicita su Código Secreto de 4 dígitos. Ingrésalo aquí para confirmar su baja:
+              Acorrala a un invitado a solas (sin testigos a 3m), susúrrale discretamente en la penumbra la frase: <strong className="text-rose-400">"¿Qué traes allí?"</strong> y solicita su Código Secreto de 4 dígitos. Al ingresarlo, se inyectará una <strong>toxina anónima</strong> silenciosa: la víctima colapsará tras un breve retraso sin descubrir quién fue su ejecutor, dándote tiempo para disimular entre la multitud:
             </p>
             <form onSubmit={handleKillSubmit} className="flex gap-2">
               <input

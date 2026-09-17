@@ -44,6 +44,7 @@ import { AIOracleModal } from './components/AIOracleModal';
 import { ShopPanel } from './components/ShopPanel';
 import { EndGameScreen } from './components/EndGameScreen';
 import { RoleCompendiumModal } from './components/RoleCompendiumModal';
+import { MacarenoWheelModal } from './components/MacarenoWheelModal';
 import { BookOpen } from 'lucide-react';
 
 export default function App() {
@@ -214,9 +215,27 @@ export default function App() {
     sendRoomAction('emergency');
   };
 
-  const handleCastVote = (targetId: string) => {
+  const handleCastVote = (targetId: string, useDoubleVote?: boolean) => {
     soundManager.playTick();
-    sendRoomAction('vote', { targetId });
+    sendRoomAction('vote', { targetId, useDoubleVote });
+  };
+
+  const handleStartDefense = (accusedId: string) => {
+    soundManager.playEmergencyAlarm();
+    sendRoomAction('start_defense', { accusedId });
+  };
+
+  const handleSpinMacareno = () => {
+    soundManager.playTick();
+    sendRoomAction('spin_macareno_wheel');
+  };
+
+  const handleCollectMigajas = async () => {
+    const res = await sendRoomAction('collect_migajas');
+    if (res.success && res.player) {
+      setCurrentPlayer(res.player);
+      soundManager.playSuccess();
+    }
   };
 
   const handleConcludeMeeting = (expelledPlayerId: string | null) => {
@@ -548,10 +567,29 @@ export default function App() {
           players={players}
           currentPlayer={currentPlayer}
           votes={gameState.votes}
+          doubleVoteUsers={gameState.doubleVoteUsers}
+          accusedPlayerId={gameState.accusedPlayerId}
+          defenseTimerRemaining={gameState.defenseTimerRemaining}
+          tribunalStage={gameState.tribunalStage}
           onCastVote={handleCastVote}
           onConcludeMeeting={handleConcludeMeeting}
+          onStartDefense={handleStartDefense}
         />
       )}
+
+      {/* Macareno Random Wheel Modal */}
+      <MacarenoWheelModal
+        isOpen={Boolean(gameState.macarenoWheelActive && gameState.macarenoEvent)}
+        event={gameState.macarenoEvent || null}
+        currentPlayer={currentPlayer}
+        isHost={currentPlayer.isHost}
+        timeRemaining={gameState.eventTimeRemaining}
+        onCollectMigajas={handleCollectMigajas}
+        onClose={() => {
+          setGameState((prev) => (prev ? { ...prev, macarenoWheelActive: false } : null));
+        }}
+        onForceSpin={handleSpinMacareno}
+      />
 
       {/* AI Oracle & Árbitro Modal */}
       <AIOracleModal
@@ -650,6 +688,32 @@ export default function App() {
           </div>
         )}
 
+        {/* Active Macareno Wheel Banner */}
+        {gameState.macarenoWheelActive && gameState.macarenoEvent && (
+          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-purple-900/40 via-pink-950/40 to-neutral-900 border border-purple-500/40 flex items-start gap-2.5 shadow-lg">
+            <span className="text-xl shrink-0 animate-bounce">🐱💀</span>
+            <div className="text-xs flex-1">
+              <div className="font-bold text-pink-300 flex items-center justify-between">
+                <span>Ruleta de Macareno: {gameState.macarenoEvent.title}</span>
+                <span className="text-[10px] font-mono text-amber-400">
+                  ⏳ {gameState.eventTimeRemaining}s
+                </span>
+              </div>
+              <p className="text-neutral-300 text-[11px] mt-0.5">
+                {gameState.macarenoEvent.instructions}
+              </p>
+              {gameState.macarenoEvent.effectType === 'migajas' && !gameState.macarenoEvent.migajasCollected && (
+                <button
+                  onClick={handleCollectMigajas}
+                  className="mt-2 w-full py-1.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black text-xs uppercase tracking-wider transition active:scale-95 flex items-center justify-center gap-1.5 shadow"
+                >
+                  <span>🥖 ¡Barrer Migajas de Luisda rápido! (+10 🪙)</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Active Party Event Banner */}
         {gameState.activeEvent && (
           <div className="p-3.5 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-start gap-2.5">
@@ -719,6 +783,17 @@ export default function App() {
                   ? `🚨 Convocar Asamblea (${currentPlayer.emergencyCallsLeft} disponible)`
                   : 'Las almas en pena no pueden convocar asambleas'}
               </button>
+
+              {/* Host Control to trigger Macareno Roulette on demand */}
+              {currentPlayer.isHost && (
+                <button
+                  id="host-macareno-btn"
+                  onClick={handleSpinMacareno}
+                  className="w-full mt-2 py-2 px-3 rounded-xl bg-purple-900/30 hover:bg-purple-900/50 border border-purple-500/40 text-purple-200 font-bold text-[11px] transition flex items-center justify-center gap-1.5"
+                >
+                  <span>🐱💀 Girar Ruleta de Macareno (Control Anfitrión)</span>
+                </button>
+              )}
             </div>
           </div>
         )}

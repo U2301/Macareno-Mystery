@@ -15,6 +15,7 @@ import {
 } from './src/types';
 import { generateFivePlayerMissions } from './src/data/missions';
 import { PARTY_EVENTS, getRandomEvent } from './src/data/events';
+import { buildMacarenoEvent } from './src/data/macarenoWheel';
 
 const app = express();
 const PORT = 3000;
@@ -624,38 +625,97 @@ setInterval(() => {
       }
     }
 
-    // Emergency timer
+    // Emergency timer & Defense timer
     if (room.state.isEmergencyActive) {
-      room.state.emergencyTimeRemaining -= 1;
-      if (room.state.emergencyTimeRemaining <= 0) {
-        room.state.isEmergencyActive = false;
+      if (room.state.tribunalStage === 'defense') {
+        room.state.defenseTimerRemaining = (room.state.defenseTimerRemaining ?? 60) - 1;
+        if (room.state.defenseTimerRemaining <= 0) {
+          // Defense time over, auto-conclude with expulsion of accused
+          room.state.tribunalStage = 'concluded';
+        }
+      } else {
+        room.state.emergencyTimeRemaining -= 1;
+        if (room.state.emergencyTimeRemaining <= 0) {
+          room.state.isEmergencyActive = false;
+        }
       }
     }
 
-    // Single Random Event per Day (Occurs at a random moment during Day, only 1 per day)
+    // Delayed Poison Assassin Execution (Victim dies anonymously without knowing killer)
+    if (room.state.delayedPoisons && room.state.delayedPoisons.length > 0) {
+      const now = Date.now();
+      room.state.delayedPoisons.forEach((poison) => {
+        if (!poison.executed && now >= poison.deathTime) {
+          poison.executed = true;
+          const target = room.players.find((p) => p.id === poison.victimId);
+          if (target && target.isAlive) {
+            const wasCazador = target.role === 'El Cazador Vengativo';
+            target.isAlive = false;
+            target.role = 'Alma Atormentadora';
+            target.team = 'Caos (Independiente)';
+            target.missions = generateFivePlayerMissions(true);
+            if (wasCazador) {
+              target.canVengeanceShot = true;
+            }
+
+            const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const rep = {
+              id: 'rep_' + Date.now(),
+              victimId: target.id,
+              victimName: target.name,
+              timestamp: timeString,
+              clue: poison.clue,
+            };
+            room.state.murderHistory.unshift(rep);
+
+            room.chatMessages.push({
+              id: 'delayed_death_' + Date.now(),
+              senderId: 'system',
+              senderName: 'ÁRBITRO FORENSE',
+              receiverId: null,
+              content: `💀 ¡COLAPSO ANÓNIMO EN LA FIESTA! ${target.name} ha sucumbido silenciosamente tras el susurro prohibido. La identidad del asesino permanece oculta en las sombras.`,
+              timestamp: timeString,
+              isSystem: true,
+              isAI: true,
+            });
+          }
+        }
+      });
+    }
+
+    // Macareno Roulette Event Timer & Single Random Event per Day
     if (room.state.status === 'playing' && !room.state.isEmergencyActive) {
-      if (room.state.activeEvent) {
+      if (room.state.macarenoWheelActive) {
+        room.state.eventTimeRemaining -= 1;
+        if (room.state.eventTimeRemaining <= 0) {
+          room.state.macarenoWheelActive = false;
+          room.state.macarenoEvent = null;
+        }
+      } else if (room.state.activeEvent) {
         room.state.eventTimeRemaining -= 1;
         if (room.state.eventTimeRemaining <= 0) {
           room.state.activeEvent = null;
-          // Event finished! No further random events will trigger today.
+          // Event finished!
         }
       } else if (room.state.phase === 'Día' && !room.state.dayEventTriggered) {
         const triggerThreshold = room.state.dayEventScheduledSecond ?? Math.floor(room.state.phaseDuration / 2);
         if (room.state.phaseTimeRemaining <= triggerThreshold) {
-          const nextEv = getRandomEvent();
-          room.state.activeEvent = nextEv;
-          room.state.eventTimeRemaining = nextEv.durationSeconds;
           room.state.dayEventTriggered = true;
+          // Trigger Macareno Wheel!
+          const macEv = buildMacarenoEvent(room.players);
+          room.state.macarenoEvent = macEv;
+          room.state.macarenoWheelActive = true;
+          room.state.eventTimeRemaining = macEv.durationSeconds;
 
           room.chatMessages.push({
-            id: 'auto_ev_' + Date.now(),
+            id: 'mac_spin_chat_' + Date.now(),
             senderId: 'system',
-            senderName: 'ÁRBITRO IA',
+            senderName: 'LA RULETA DE MACARENO',
             receiverId: null,
-            content: `🎲 ¡EVENTO DEL DÍA ${room.state.dayCount || 1}: "${nextEv.title}"! ${nextEv.instructions} (Tiempo: ${nextEv.durationSeconds}s). ¡Solo habrá este evento hoy!`,
+            content: `🐱💀 ¡LA RULETA DE MACARENO HA APARECIDO EN LA FIESTA! Ha caído en "${macEv.title}". ${macEv.lore} ${macEv.instructions}`,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             isSystem: true,
+            isAI: true,
           });
         }
       }
@@ -1126,41 +1186,13 @@ app.post('/api/rooms/:roomCode/action', async (req, res) => {
     const wasCazador = victim.role === 'El Cazador Vengativo';
     const wasTestigoOcular = victim.role === 'El Testigo Ocular';
 
-    // Turn victim into Alma Atormentadora with 5 ghost missions
-    victim.isAlive = false;
-    victim.role = 'Alma Atormentadora';
-    victim.team = 'Caos (Independiente)';
-    victim.missions = generateFivePlayerMissions(true);
-    if (wasCazador) {
-      victim.canVengeanceShot = true;
-    }
-
+    // Anonymous Murder Mechanic:
+    // The victim is tagged with a stealth delayed toxin or silent sudden demise.
+    // The victim does NOT know who the killer is.
+    // We register the delayed poison execution (10 to 20 seconds delay, or immediate anonymous).
+    const delaySeconds = 12; // Gives killer 12s to walk away naturally so victim has no idea who whispered or entered the code
+    const deathTime = Date.now() + delaySeconds * 1000;
     const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    // Testigo Ocular (BotC Ravenkeeper/Butler Witness): Receives 2 names, 1 is the killer
-    if (wasTestigoOcular) {
-      const livingInnocents = room.players.filter(
-        (p) => p.isAlive && p.id !== actingPlayer.id && p.id !== victim.id && p.team === 'Fiesta (Inocentes)'
-      );
-      const decoy = livingInnocents.length > 0
-        ? livingInnocents[Math.floor(Math.random() * livingInnocents.length)]
-        : null;
-      const candidates = decoy
-        ? fisherYatesShuffle([actingPlayer.name, decoy.name])
-        : [actingPlayer.name, 'Una silueta en la sombra'];
-      victim.testigoKillerCandidates = candidates;
-
-      room.chatMessages.push({
-        id: 'testigo_msg_' + Date.now(),
-        senderId: 'system',
-        senderName: 'ÁRBITRO IA (TESTIGO OCULAR)',
-        receiverId: victim.id,
-        content: `👁️ TESTIMONIO PÓSTUMO: Al recibir el golpe fatal en la penumbra, viste con claridad a 2 sospechosos merodeando: "${candidates[0]}" y "${candidates[1]}". UNO DE ELLOS ES EL ASESINO. Usa tu voz en asamblea para guiar a la fiesta.`,
-        timestamp: timeString,
-        isSystem: true,
-        isAI: true,
-      });
-    }
 
     // Generate AI Forensic Clue using Gemini
     let aiClue = 'Se detectaron migajas cerca del cuerpo y olor a pizza del Seven.';
@@ -1169,9 +1201,9 @@ app.post('/api/rooms/:roomCode/action', async (req, res) => {
       if (ai) {
         const prompt = `Genera una pista forense abstracta y críptica para el Médico Forense en una fiesta.
 La víctima fue: ${victim.name}.
-El atacante le susurró discretamente: "¿Qué traes allí?".
+El atacante le susurró discretamente en penumbra: "¿Qué traes allí?".
 Incluye sutiles referencias humorísticas al grupo (migajas de Luisda, mandilón como León, la rata Uriel, el caballo de Día de Muertos, comida en la uni como Jackie, Meta AI el metiche, Cancún, Los Hidrotemplados, pizza o el Seven).
-La pista no debe revelar directamente el nombre del asesino, sino un detalle sensorial o de vestimenta/comportamiento. Máximo 2 oraciones.`;
+La pista JAMÁS debe revelar directamente el nombre del asesino, sino un detalle sensorial o de vestimenta/comportamiento. Máximo 2 oraciones.`;
 
         const resp = await ai.models.generateContent({
           model: 'gemini-3.8-flash',
@@ -1183,28 +1215,48 @@ La pista no debe revelar directamente el nombre del asesino, sino un detalle sen
       console.error('AI clue error:', err);
     }
 
-    const report: MurderReport = {
-      id: 'rep_' + Date.now(),
+    room.state.delayedPoisons = room.state.delayedPoisons || [];
+    room.state.delayedPoisons.push({
       victimId: victim.id,
       victimName: victim.name,
-      timestamp: timeString,
+      killerId: actingPlayer.id,
+      killerName: actingPlayer.name,
+      strikeTime: Date.now(),
+      deathTime,
       clue: aiClue,
-    };
+      executed: false,
+    });
 
-    room.state.murderHistory.unshift(report);
+    // Testigo Ocular decoy logic: even if they see candidates, it won't single out the killer immediately
+    if (wasTestigoOcular) {
+      const otherLiving = room.players.filter(
+        (p) => p.isAlive && p.id !== victim.id && p.id !== actingPlayer.id
+      );
+      const decoy = otherLiving.length > 0
+        ? otherLiving[Math.floor(Math.random() * otherLiving.length)]
+        : null;
+      const candidates = decoy
+        ? fisherYatesShuffle([actingPlayer.name, decoy.name])
+        : [actingPlayer.name, 'Una sombra encapuchada'];
+      victim.testigoKillerCandidates = candidates;
+    }
 
+    // Secret whisper to victim: they only hear that poison was injected, killer is completely anonymous
     room.chatMessages.push({
-      id: 'rep_chat_' + Date.now(),
+      id: 'poison_whisper_' + Date.now(),
       senderId: 'system',
-      senderName: 'ÁRBITRO IA',
-      receiverId: null,
-      content: `💀 ¡CRIMEN EN LA FIESTA! ${victim.name} ha caído tras escuchar la frase prohibida "¿Qué traes allí?". Ahora vaga como Alma Atormentadora.`,
+      senderName: 'ÁRBITRO ANÓNIMO',
+      receiverId: victim.id,
+      content: `🧪 Una sombra anónima susurró a tu espalda: "¿Qué traes allí?". Has sido envenenado con toxina silenciosa y colapsarás en unos segundos. Tu ejecutor escapó en la penumbra y su identidad permanece en total anonimato.`,
       timestamp: timeString,
       isSystem: true,
       isAI: true,
     });
 
-    return res.json({ success: true, message: `Eliminación de ${victim.name} confirmada.`, report });
+    return res.json({
+      success: true,
+      message: `Toxina letal administrada a ${victim.name}. La víctima colapsará en breve sin saber quién la atacó. Aléjate con disimulo.`,
+    });
   }
 
   // 2. Action: Emergency Buzzer
@@ -1224,6 +1276,10 @@ La pista no debe revelar directamente el nombre del asesino, sino un detalle sen
     room.state.emergencyCallerName = actingPlayer.name;
     room.state.emergencyTimeRemaining = 180;
     room.state.votes = {};
+    room.state.doubleVoteUsers = [];
+    room.state.accusedPlayerId = null;
+    room.state.tribunalStage = 'voting';
+    room.state.defenseTimerRemaining = 60;
 
     room.chatMessages.push({
       id: 'emg_' + Date.now(),
@@ -1238,15 +1294,115 @@ La pista no debe revelar directamente el nombre del asesino, sino un detalle sen
     return res.json({ success: true });
   }
 
-  // 3. Action: Cast Vote
+  // 3. Action: Cast Vote (with support for Double Vote)
   if (actionType === 'vote') {
-    const { targetId } = payload;
+    const { targetId, useDoubleVote } = payload;
     if (!actingPlayer.isAlive) {
       return res.status(403).json({ error: 'Las almas no pueden votar en la asamblea.' });
     }
 
     room.state.votes[actingPlayer.id] = targetId;
-    return res.json({ success: true, votes: room.state.votes });
+
+    if (useDoubleVote && (actingPlayer.doubleVotesAvailable || 0) > 0) {
+      room.state.doubleVoteUsers = room.state.doubleVoteUsers || [];
+      if (!room.state.doubleVoteUsers.includes(actingPlayer.id)) {
+        room.state.doubleVoteUsers.push(actingPlayer.id);
+        actingPlayer.doubleVotesAvailable = Math.max(0, (actingPlayer.doubleVotesAvailable || 0) - 1);
+        room.chatMessages.push({
+          id: 'dvote_' + Date.now(),
+          senderId: 'system',
+          senderName: 'ÁRBITRO IA (VOTO DOBLE)',
+          receiverId: null,
+          content: `⚡ ¡UN CIUDADANO HA ACTIVADO UNA FICHA DE VOTO DOBLE! Su voto pesa por dos en este escrutinio.`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          isSystem: true,
+        });
+      }
+    }
+
+    return res.json({
+      success: true,
+      votes: room.state.votes,
+      doubleVoteUsers: room.state.doubleVoteUsers,
+    });
+  }
+
+  // 3.5 Action: Start Defense Stage
+  if (actionType === 'start_defense') {
+    const { accusedId } = payload;
+    const accused = room.players.find((p) => p.id === accusedId);
+    if (!accused) return res.status(404).json({ error: 'Acusado no encontrado' });
+
+    room.state.accusedPlayerId = accusedId;
+    room.state.tribunalStage = 'defense';
+    room.state.defenseTimerRemaining = 60;
+
+    room.chatMessages.push({
+      id: 'def_stage_' + Date.now(),
+      senderId: 'system',
+      senderName: 'TRIBUNAL DE MACARENO',
+      receiverId: null,
+      content: `⚖️ ¡EL ESTRADO CONVOCA A ${accused.name}! Es el sospechoso principal de la asamblea. Se le otorgan 60 segundos en el centro de la sala para emitir su alegato final de inocencia.`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isSystem: true,
+      isAI: true,
+    });
+
+    return res.json({ success: true, roomState: room.state });
+  }
+
+  // 3.6 Action: Spin Macareno Wheel (Host or triggered)
+  if (actionType === 'spin_macareno_wheel') {
+    const { sliceIndex } = payload || {};
+    const macEv = buildMacarenoEvent(room.players, sliceIndex);
+    room.state.macarenoEvent = macEv;
+    room.state.macarenoWheelActive = true;
+    room.state.eventTimeRemaining = macEv.durationSeconds;
+    room.state.dayEventTriggered = true;
+
+    room.chatMessages.push({
+      id: 'mac_manual_' + Date.now(),
+      senderId: 'system',
+      senderName: 'LA RULETA DE MACARENO',
+      receiverId: null,
+      content: `🐱💀 ¡LA RULETA DE MACARENO HA GIRADO! Resultado: "${macEv.title}". ${macEv.lore} ${macEv.instructions}`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isSystem: true,
+      isAI: true,
+    });
+
+    return res.json({ success: true, event: macEv, roomState: room.state });
+  }
+
+  // 3.7 Action: Collect Luisda's Migajas (Quick interactive event)
+  if (actionType === 'collect_migajas') {
+    if (!room.state.macarenoEvent || room.state.macarenoEvent.effectType !== 'migajas') {
+      return res.status(400).json({ error: 'No hay migajas de Luisda en el suelo en este momento.' });
+    }
+
+    if (room.state.macarenoEvent.migajasCollected) {
+      return res.status(400).json({ error: `¡Demasiado tarde! ${room.state.macarenoEvent.migajasCollectorName} ya las barrió.` });
+    }
+
+    room.state.macarenoEvent.migajasCollected = true;
+    room.state.macarenoEvent.migajasCollectorName = actingPlayer.name;
+    actingPlayer.coins = (actingPlayer.coins || 0) + 10;
+
+    room.chatMessages.push({
+      id: 'mig_win_' + Date.now(),
+      senderId: 'system',
+      senderName: 'MIGAJAS DE LUISDA',
+      receiverId: null,
+      content: `🥖🧹 ¡BARRIDO RELÁMPAGO! ${actingPlayer.name} fue el más rápido en recoger las migajas de Luisda y se embolsa +10 monedas del Seven.`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isSystem: true,
+    });
+
+    return res.json({
+      success: true,
+      player: actingPlayer,
+      event: room.state.macarenoEvent,
+    });
   }
 
   // 4. Action: Conclude Emergency
@@ -1366,6 +1522,10 @@ La pista no debe revelar directamente el nombre del asesino, sino un detalle sen
     room.state.isEmergencyActive = false;
     room.state.meetingRound += 1;
     room.state.votes = {};
+    room.state.doubleVoteUsers = [];
+    room.state.accusedPlayerId = null;
+    room.state.tribunalStage = 'concluded';
+    room.state.defenseTimerRemaining = 60;
 
     return res.json({ success: true });
   }

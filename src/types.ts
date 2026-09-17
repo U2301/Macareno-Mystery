@@ -186,6 +186,12 @@ export interface Player {
   // Buzón de Informes Nocturnos
   nightReports?: NightReportEntry[];
   
+  // Modificadores de la Ruleta de Macareno
+  macarenoBuff?: {
+    type: 'snack_immune' | 'alfa_vote' | 'silenced' | 'horse';
+    expiresAt: number;
+  };
+
   // Roles de engaño
   camaleonUsed: boolean;
   hackerUsed: boolean;
@@ -287,6 +293,33 @@ export interface AILogEntry {
   type: 'forensic' | 'lore' | 'event' | 'referee';
 }
 
+export interface MacarenoWheelEvent {
+  id: string;
+  sliceIndex: number;
+  title: string;
+  lore: string;
+  characterArchetype: string; // 'Jackie' | 'Luisda' | 'Elle' | 'Caballo' | 'Alfa' | 'Chisme' | 'Capricho'
+  assignedPlayerId: string;
+  assignedPlayerName: string;
+  instructions: string;
+  durationSeconds: number;
+  effectType: 'snack' | 'migajas' | 'novia_malvada' | 'caballo' | 'alfa' | 'chisme' | 'capricho';
+  migajasCollected?: boolean;
+  migajasCollectorName?: string;
+  timestamp: string;
+}
+
+export interface DelayedPoisonVictim {
+  victimId: string;
+  victimName: string;
+  killerId: string;
+  killerName: string;
+  strikeTime: number;
+  deathTime: number; // Resolves silently after delay
+  clue: string;
+  executed: boolean;
+}
+
 export interface GameState {
   roomCode: string;
   status: 'lobby' | 'playing' | 'ended';
@@ -304,7 +337,15 @@ export interface GameState {
   activeEvent: PartyEvent | null;
   eventTimeRemaining: number;
   nextEventCooldown?: number;
+  macarenoWheelActive?: boolean;
+  macarenoEvent?: MacarenoWheelEvent | null;
+  macarenoWheelSpinning?: boolean;
+  delayedPoisons?: DelayedPoisonVictim[];
   votes: Record<string, string>; // voterId -> targetId | 'skip'
+  doubleVoteUsers?: string[]; // voterIds who activated double vote in this tribunal
+  accusedPlayerId?: string | null; // For final plea defense in tribunal
+  defenseTimerRemaining?: number; // 60s defense countdown
+  tribunalStage?: 'voting' | 'defense' | 'concluded';
   meetingRound: number;
   hackerGlitchActiveUntil: number | null;
   murderHistory: MurderReport[];
